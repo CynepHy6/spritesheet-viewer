@@ -1,16 +1,18 @@
-import React from "react";
-import Controller from "./Controller";
-import MenuButton from "./MenuButton";
+import React from 'react';
+import Controller from './Controller';
+import MenuButton from './MenuButton';
 
 class Preview extends React.Component {
-	constructor(props){
+	constructor(props) {
 		super(props);
 		this.state = {
 			isPlaying: false,
 			isError: false,
 			frame: 0,
 			totalFrames: 0,
-		}
+			firstFrame: 0,
+			lastFrame: 0,
+		};
 		this.animateTask = null;
 		this.resumeTask = null;
 		this.animation = null;
@@ -109,12 +111,14 @@ class Preview extends React.Component {
 
 			this.animation = a;
 			const totalFrames = this.calcTotalFrames(a);
+			const lastFrame = totalFrames;
 
 			this.createAnimateTask(this.animate());
 			this.setState({
 				totalFrames,
 				isError: false,
 				horizontal,
+				lastFrame,
 			});
 		}
 		image.onload = this.loadImage(null);
@@ -125,7 +129,7 @@ class Preview extends React.Component {
 			this.screens.changeTo("upload");
 		};
 	}
-	
+
 	calcTotalFrames = (a = this.animation) => {
 		const {srclength, fspan} = a;
 		const totalFrames = Math.ceil(srclength/fspan);
@@ -158,7 +162,7 @@ class Preview extends React.Component {
 			const totalFrames = this.calcTotalFrames(a);
 			this.setState({totalFrames});
 		}
-		
+
 		// Update the frame
 		this.animate(0, true)();
 	}
@@ -197,31 +201,32 @@ class Preview extends React.Component {
 			case "r":
 				a.forward = false;
 				break;
-			case "f":
+			case 'f':
 				a.forward = true;
 		}
 
-		// Update frame counter
-		a.frame += frameAdvance === null ? ( a.forward ? 1 : -1) : frameAdvance;
-		// Loop over if past range
-		const reversePlayback = frameAdvance === null && playback === "b";
-		if(a.frame >= totalFrames){
-			if(reversePlayback){ 
-				a.forward = false; 
-				a.frame = totalFrames-2;
-			} else {
-				a.frame = 0;
+			// Update frame counter
+			a.frame += frameAdvance === null ? (a.forward ? 1 : -1) : frameAdvance;
+			// Loop over if past range
+			const reversePlayback = frameAdvance === null && playback === 'b';
+			const {firstFrame, lastFrame} = this.state;
+			if (a.frame >= lastFrame) {
+				if (reversePlayback) {
+					a.forward = false;
+					a.frame = lastFrame - 1;
+				} else {
+					a.frame = firstFrame;
+					a.alt = !a.alt;
+				}
+			} else if (a.frame < firstFrame) {
+				if (reversePlayback) {
+					a.forward = true;
+					a.frame = firstFrame + 1;
+				} else {
+					a.frame = lastFrame;
+				}
 				a.alt = !a.alt;
 			}
-		}else if(a.frame < 0){
-			if(reversePlayback){ 
-				a.forward = true; 
-				a.frame = 1;
-			} else {
-				a.frame = totalFrames-1;
-			}
-			a.alt = !a.alt;
-		}
 
 		// Update state
 		this.setState({frame: a.frame});
@@ -239,24 +244,24 @@ class Preview extends React.Component {
 			});
 		}
 	};
-	
+
 	// Draw frame to a canvas
 	renderFrame = (frame=null, a=this.animation, fillBG=false) => {
 		if(frame === null){
 			({frame} = a);
 		}
 		const {
-			canvas, 
-			horizontal: hz, 
-			scale, 
-			fspan, 
-			fthick, 
-			trimR, 
-			trimL, 
-			trimU, 
-			trimD, 
-			forward, 
-			mirroring, 
+			canvas,
+			horizontal: hz,
+			scale,
+			fspan,
+			fthick,
+			trimR,
+			trimL,
+			trimU,
+			trimD,
+			forward,
+			mirroring,
 			flipping,
 			alt,
 		} = a;
@@ -265,10 +270,10 @@ class Preview extends React.Component {
 		const fh = (!hz ? fspan : fthick) - (trimU + trimD);
 
 		// Check if size is valid
-		if(fw > 0 && fh > 0){ 
+		if (fw > 0 && fh > 0) {
 			// Resize canvas. This also clears it.
-			canvas.width = fw*scale;
-			canvas.height = fh*scale;
+			canvas.width = fw * scale;
+			canvas.height = fh * scale;
 		} else {
 			return;
 		}
@@ -319,11 +324,17 @@ class Preview extends React.Component {
 			}
 		},
 		toggleplay: () => {
-			if(this.state.isPlaying){
+			if (this.state.isPlaying) {
 				this.controls.pause();
 			} else {
 				this.controls.play();
 			}
+		},
+		setFirst: (event) => {
+			this.setState({firstFrame: +event.target.value});
+		},
+		setLast: (event) => {
+			this.setState({lastFrame: +event.target.value});
 		},
 	}
     render() {
@@ -336,20 +347,22 @@ class Preview extends React.Component {
 								<canvas ref="canvas"/>
 							</div>
 						</div>
-						<Controller 
-							controls={this.controls} 
-							isPlaying={this.state.isPlaying} 
-							frameCount={`${String(this.state.frame+1)}/${String(this.state.totalFrames)}`}
+						<Controller
+								controls={this.controls}
+								isPlaying={this.state.isPlaying}
+								frameCount={`${String(this.state.frame + 1)}/${String(this.state.totalFrames)}`}
+								firstFrame={this.state.firstFrame}
+								lastFrame={this.state.lastFrame}
 						/>
 					</div>
 				</div>
-			
+
 				<div id="uploadScreen" className="box mb3 pa3 center" onDragOver={this.onDragOver}>
 					<MenuButton className="pv4">
-						{this.state.isError ? (<span>Error loading image...</span>) : (<span>No image loaded.</span>)} 
+						{this.state.isError ? (<span>Error loading image...</span>) : (<span>No image loaded.</span>)}
 						<br />
 						Click to choose a file, or drag or paste here.
-						
+
 						<input className="dn"
 							type="file"
 							name="Choose File"
@@ -364,7 +377,7 @@ class Preview extends React.Component {
 			</div>
 		);
     }
-}	
+}
 
 
 export default Preview;
